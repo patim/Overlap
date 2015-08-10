@@ -1,2 +1,2 @@
 # Overlap
-Mathematica package calculating the maximum overlap of two waveforms s
+Mathematica package calculating the maximum overlap of two waveforms
