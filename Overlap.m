@@ -10,7 +10,7 @@ BeginPackage["Overlap`"]
 ReadKerrQNM::usage="ReadKerrQNM[l, m, n] loads quasi-normal modes "<>
 "for given l, m and n.";
 
-\[Rho]2max::usage"";
+\[Rho]2max::usage="";
 
 Begin["Private`"]
 
@@ -62,21 +62,30 @@ DefineInterpolations[lm_,modes_,neg_]:=
 ]
 
 
-\[Psi]k[lm_, lmn_, \[Delta]_, a_, \[Theta]_, t_] := 
- Table[\[ScriptCapitalA][lm[[1]], lmn[[i, 1]], lmn[[i, 2]], lmn[[i, 3]]][a]*
-	Exp[-I*\[Omega]bar[lmn[[i, 1]], lmn[[i, 2]], lmn[[i, 3]]][a]*t/\[Delta]], {i, 1, Length[lmn]}]
+\[Psi]k[lm_, modes_, pmodes_,\[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg={}},
+	pos = Table[WignerD[{modes[[i, 1]],-lm[[2]],-modes[[i, 2]]},\[Theta]]*\[ScriptCapitalA][lm[[1]], modes[[i, 1]], modes[[i, 2]], modes[[i, 3]]][a]*
+		Exp[-I*\[Omega]bar[modes[[i, 1]], modes[[i, 2]], modes[[i, 3]]][a]*t/\[Delta]], {i, 1, Length[modes]}];
+	If[Length[pmodes]>0,
+		neg = Table[(-1)^(pmodes[[i, 1]]+lm[[1]])*WignerD[{pmodes[[i, 1]],-lm[[2]],-pmodes[[i, 2]]},\[Theta]]*Conjugate[\[ScriptCapitalA][lm[[1]], pmodes[[i, 1]], -pmodes[[i, 2]], pmodes[[i, 3]]][a]*
+		Exp[-I*\[Omega]bar[pmodes[[i, 1]], -pmodes[[i, 2]], pmodes[[i, 3]]][a]*t/\[Delta]]], {i, 1, Length[pmodes]}];
+	];
+	pos~Join~neg
+]
 
 
-
-\[Rho]2max[data_,lm_,modes_,pmodes_,\[Delta]_,a_,\[Theta]_,it0_]:=Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi],time,i,l,m},
-	For[i=1,i<=Length[data],i++,
-		l=data[[i,2,1]];
-		m=data[[i,2,2]];
+\[Rho]2max[data_,lm_,modes_,pmodes_,\[Delta]_?NumberQ,a_?NumberQ,\[Theta]_?NumberQ,it0_]:=
+	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi],time,i,l,m},
+	For[i=1,i<=Length[lm],i++,
+		l=lm[[i,1]];
+		m=lm[[i,2]];
 		time[l,m]=Table[data[[i,1,j,1]],{j,-it0,-1}];
 	];
 	DefineInterpolations[lm,modes,1];
 	DefineInterpolations[lm,pmodes,-1];
-	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, \[Delta], a, \[Theta], #]&/@ time[lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
+
+	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta], a, \[Theta], #]&/@ 
+				time[lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
+
 	\[Psi] = Flatten[Table[data[[j, 1, i, 2]] + I*data[[j, 1, i, 3]], 
 				{j, 1, Length[data]}, {i,-it0, -1}], 1];
 	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
@@ -85,10 +94,10 @@ DefineInterpolations[lm_,modes_,neg_]:=
 	
 	out = Re[Conjugate[A].Inverse[B].A/\[Psi]\[Psi]];
 	out
-	(*
+	
 	(*This speeds up the calculations, but one must be careful with it*)
-	\[Rho]2max[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0] = out;
-	out;*)
+	(*\[Rho]2max[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0] = out;
+	out*)
 ]
 
 
