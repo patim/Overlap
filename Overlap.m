@@ -10,7 +10,7 @@ BeginPackage["Overlap`"]
 ReadKerrQNM::usage="ReadKerrQNM[l, m, n] loads quasi-normal modes "<>
 "for given l, m and n.";
 
-\[Rho]2max::usage="";
+\[Rho]2max::usage="Calculates the overlap of two waveforms.";
 
 Begin["Private`"]
 
