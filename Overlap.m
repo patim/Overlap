@@ -73,6 +73,13 @@ DefineInterpolations[lm_,modes_,neg_]:=
 ]
 
 
+SVDInverse[mat_]:=Module[{u,w,v,invw,small=10^-12},
+	{u,w,v}=SingularValueDecomposition[mat];
+	invw=DiagonalMatrix[Table[If[w[[i, i]] > small, 1/w[[i, i]], 0], {i, 1, Length[w]}]];
+	v.invw.ConjugateTranspose[u]
+]
+
+
 \[Rho]2max[data_,lm_,modes_,pmodes_,\[Delta]_?NumberQ,a_?NumberQ,\[Theta]_?NumberQ,it0_]:=
 	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi],time,i,l,m},
 	For[i=1,i<=Length[lm],i++,
@@ -90,9 +97,10 @@ DefineInterpolations[lm_,modes_,neg_]:=
 				{j, 1, Length[data]}, {i,-it0, -1}], 1];
 	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
+(*Print["A= ", A];*)
 	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
-	
-	out = Re[Conjugate[A].Inverse[B].A/\[Psi]\[Psi]];
+(*Print["B=",B];*)
+	out = Re[Conjugate[A].SVDInverse[B].A/\[Psi]\[Psi]];
 	out
 	
 	(*This speeds up the calculations, but one must be careful with it*)
