@@ -9,8 +9,8 @@ Maxim Zalutskiy, 2015
 BeginPackage["Overlap`"]
 ReadKerrQNM::usage="ReadKerrQNM[l, m, n] loads quasi-normal modes "<>
 "for given l, m and n.";
-
-\[Rho]2max::usage="Calculates the overlap of two waveforms.";
+Coefficients::usage="";
+\[Rho]2::usage="Calculates the overlap of two waveforms.";
 
 Begin["Private`"]
 
@@ -80,7 +80,37 @@ SVDInverse[mat_]:=Module[{u,w,v,invw,small=10^-12},
 ]
 
 
-\[Rho]2max[data_,lm_,modes_,pmodes_,\[Delta]_?NumberQ,a_?NumberQ,\[Theta]_?NumberQ,it0_]:=
+Coefficients[data_,lm_,modes_,pmodes_,it0_]:=
+	Module[{i,l,m,time,\[Rho]2max,alpha,alphaExp, \[Psi]kmat,\[Psi],\[Psi]\[Psi],A,B,\[Delta]max,amax,Isize,out},
+	For[i=1,i<=Length[lm],i++,
+		l=lm[[i,1]];
+		m=lm[[i,2]];
+		time[l,m]=Table[data[[i,1,j,1]],{j,-it0,-1}];
+	];
+	\[Rho]2max = FindMaximum[\[Rho]2[data, lm, modes, pmodes, \[Delta], a, 0, it0], {{\[Delta], 0.9}, {a, 0.6}}, 
+			Gradient :> {"FiniteDifference"}, AccuracyGoal -> 6];
+
+(*Print["\[Rho]2max: ", \[Rho]2max];*)
+	\[Delta]max = \[Rho]2max[[2, 1, 2]];	
+	amax = \[Rho]2max[[2, 2, 2]];
+	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta]max, amax, 0, #]&/@ 
+				time[lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
+	\[Psi] = Flatten[Table[data[[j, 1, i, 2]] + I*data[[j, 1, i, 3]], 
+				{j, 1, Length[data]}, {i,-it0, -1}], 1];
+	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
+	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
+	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
+	
+	Isize = Length[B];
+	(*out = Eigensystem[{Outer[Times,A,Conjugate[A]],B}];*)
+	alpha = SVDInverse[B].A;
+	alphaExp = Table[{Abs[alpha[[i]]],Arg[alpha[[i]]]}, {i,1,Length[alpha]}];
+	{\[Rho]2max, alphaExp}
+	(*Eigensystem[SVDInverse[B].Outer[Times,A,Conjugate[A]]-\[Rho]2max[[1]]*IdentityMatrix[Isize]]*)
+]
+
+
+\[Rho]2[data_,lm_,modes_,pmodes_,\[Delta]_?NumberQ,a_?NumberQ,\[Theta]_?NumberQ,it0_]:=
 	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi],time,i,l,m},
 	For[i=1,i<=Length[lm],i++,
 		l=lm[[i,1]];
@@ -92,7 +122,7 @@ SVDInverse[mat_]:=Module[{u,w,v,invw,small=10^-12},
 
 	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta], a, \[Theta], #]&/@ 
 				time[lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
-
+(*Print["\[Psi]kmat: ",\[Psi]kmat];*)
 	\[Psi] = Flatten[Table[data[[j, 1, i, 2]] + I*data[[j, 1, i, 3]], 
 				{j, 1, Length[data]}, {i,-it0, -1}], 1];
 	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
