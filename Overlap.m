@@ -11,6 +11,7 @@ ReadKerrQNM::usage="ReadKerrQNM[l, m, n] loads quasi-normal modes "<>
 "for given l, m and n.";
 Coefficients::usage="";
 \[Rho]2::usage="Calculates the overlap of two waveforms.";
+Protect[Mass,Spin,Theta];
 
 Begin["Private`"]
 
@@ -62,51 +63,59 @@ DefineInterpolations[lm_,modes_,neg_]:=
 ]
 
 
-\[Psi]k[lm_, modes_, pmodes_,\[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg={}},
-	pos = Table[WignerD[{modes[[i, 1]],-lm[[2]],-modes[[i, 2]]},\[Theta]]*\[ScriptCapitalA][lm[[1]], modes[[i, 1]], modes[[i, 2]], modes[[i, 3]]][a]*
-		Exp[-I*\[Omega]bar[modes[[i, 1]], modes[[i, 2]], modes[[i, 3]]][a]*t/\[Delta]], {i, 1, Length[modes]}];
+\[Psi]k[lm_, modes_, pmodes_,\[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg={},l=lm[[1]],m=lm[[2]]},
+	pos = Table[WignerD[{modes[[i, 1]],-m,-modes[[i, 2]]},\[Theta]]*
+				\[ScriptCapitalA][l, modes[[i, 1]], modes[[i, 2]], modes[[i, 3]]][a]*
+				Exp[-I*\[Omega]bar[modes[[i, 1]], modes[[i, 2]], modes[[i, 3]]][a]*t/\[Delta]],
+				{i, 1, Length[modes]}];
 	If[Length[pmodes]>0,
-		neg = Table[(-1)^(pmodes[[i, 1]]+lm[[1]])*WignerD[{pmodes[[i, 1]],-lm[[2]],-pmodes[[i, 2]]},\[Theta]]*Conjugate[\[ScriptCapitalA][lm[[1]], pmodes[[i, 1]], -pmodes[[i, 2]], pmodes[[i, 3]]][a]*
-		Exp[-I*\[Omega]bar[pmodes[[i, 1]], -pmodes[[i, 2]], pmodes[[i, 3]]][a]*t/\[Delta]]], {i, 1, Length[pmodes]}];
+		neg = Table[(-1)^(l+pmodes[[i, 1]])*WignerD[{pmodes[[i, 1]],-m,-pmodes[[i, 2]]},\[Theta]]*
+			   Conjugate[\[ScriptCapitalA][l, pmodes[[i, 1]], -pmodes[[i, 2]], pmodes[[i, 3]]][a]*
+			   Exp[-I*\[Omega]bar[pmodes[[i, 1]], -pmodes[[i, 2]], pmodes[[i, 3]]][a]*t/\[Delta]]], 
+			   {i, 1, Length[pmodes]}];
 	];
 	pos~Join~neg
 ]
 
 
-SVDInverse[mat_]:=Module[{u,w,v,invw,small=10^-12},
+SVDInverse[mat_]:=Module[{u,w,v,invw,small=10^-12,\[Sigma]2},
 	{u,w,v}=SingularValueDecomposition[mat];
 	invw=DiagonalMatrix[Table[If[w[[i, i]] > small, 1/w[[i, i]], 0], {i, 1, Length[w]}]];
-	v.invw.ConjugateTranspose[u]
+	\[Sigma]2 = Table[Sum[invw[[j,j]]*v[[i,j]]^2,{j,1,Length@v}],{i,1,Length@v}];
+	{v.invw.ConjugateTranspose[u], \[Sigma]2}
 ]
 
 
-Coefficients[data_,lm_,modes_,pmodes_,it0_]:=
-	Module[{i,l,m,time,\[Rho]2max,alpha,alphaExp, \[Psi]kmat,\[Psi],\[Psi]\[Psi],A,B,\[Delta]max,amax,Isize,out},
+Options[Coefficients]=Union[{Mass->0.9,Spin->0.6,Theta->0}, Options@FindMaximum]
+Coefficients[data_,lm_,modes_,pmodes_,it0_,opts : OptionsPattern[]]:=
+	Module[{i,l,m,time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B,\[Delta]max,amax,\[Theta]max,invB,\[Sigma]2},
 	For[i=1,i<=Length[lm],i++,
 		l=lm[[i,1]];
 		m=lm[[i,2]];
 		time[l,m]=Table[data[[i,1,j,1]],{j,-it0,-1}];
 	];
-	\[Rho]2max = FindMaximum[\[Rho]2[data, lm, modes, pmodes, \[Delta], a, 0, it0], {{\[Delta], 0.9}, {a, 0.6}}, 
-			Gradient :> {"FiniteDifference"}, AccuracyGoal -> 6];
+	\[Rho]2max = FindMaximum[\[Rho]2[data, lm, modes, pmodes, \[Delta], a, \[Theta], it0], 
+			{{\[Delta],OptionValue[Mass]},{a,OptionValue[Spin]},{\[Theta],OptionValue[Theta]}},
+			Evaluate@FilterRules[{opts},Options@FindMaximum]];
 
 (*Print["\[Rho]2max: ", \[Rho]2max];*)
 	\[Delta]max = \[Rho]2max[[2, 1, 2]];	
 	amax = \[Rho]2max[[2, 2, 2]];
-	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta]max, amax, 0, #]&/@ 
+	\[Theta]max = \[Rho]2max[[2, 3, 2]];
+
+	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta]max, amax, \[Theta]max, #]&/@ 
 				time[lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
 	\[Psi] = Flatten[Table[data[[j, 1, i, 2]] + I*data[[j, 1, i, 3]], 
-				{j, 1, Length[data]}, {i,-it0, -1}], 1];
-	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
+				{j, 1, Length[data]}, {i,-it0,-1}], 1];
+(*	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];*)
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
 	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
 	
-	Isize = Length[B];
 	(*out = Eigensystem[{Outer[Times,A,Conjugate[A]],B}];*)
-	alpha = SVDInverse[B].A;
+	{invB,\[Sigma]2} = SVDInverse[B];
+	alpha = invB.A;
 	alphaExp = Table[{Abs[alpha[[i]]],Arg[alpha[[i]]]}, {i,1,Length[alpha]}];
-	{\[Rho]2max, alphaExp}
-	(*Eigensystem[SVDInverse[B].Outer[Times,A,Conjugate[A]]-\[Rho]2max[[1]]*IdentityMatrix[Isize]]*)
+	{\[Rho]2max, alphaExp, \[Sigma]2}
 ]
 
 
@@ -130,7 +139,7 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_]:=
 (*Print["A= ", A];*)
 	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
 (*Print["B=",B];*)
-	out = Re[Conjugate[A].SVDInverse[B].A/\[Psi]\[Psi]];
+	out = Re[Conjugate[A].SVDInverse[B][[1]].A/\[Psi]\[Psi]];
 	out
 	
 	(*This speeds up the calculations, but one must be careful with it*)
