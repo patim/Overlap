@@ -88,7 +88,7 @@ SVDInverse[mat_]:=Module[{u,w,v,invw,small=10^-12,\[Sigma]2},
 
 Options[Coefficients]=Union[{Mass->0.9,Spin->0.6,Theta->0}, Options@FindMaximum]
 Coefficients[data_,lm_,modes_,pmodes_,it0_,opts : OptionsPattern[]]:=
-	Module[{i,l,m,time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B,\[Delta]max,amax,\[Theta]max,invB,\[Sigma]2},
+	Module[{i,l,m,time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B,\[Delta]max,amax,\[Theta]max,invB,\[Sigma]2,modSize},
 	For[i=1,i<=Length[lm],i++,
 		l=lm[[i,1]];
 		m=lm[[i,2]];
@@ -114,7 +114,11 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts : OptionsPattern[]]:=
 	(*out = Eigensystem[{Outer[Times,A,Conjugate[A]],B}];*)
 	{invB,\[Sigma]2} = SVDInverse[B];
 	alpha = invB.A;
-	alphaExp = Table[{Abs[alpha[[i]]],Arg[alpha[[i]]]}, {i,1,Length[alpha]}];
+	modSize = Length[modes];
+	alphaExp = Table[{Abs[alpha[[i]]],Arg[alpha[[i]]]}, {i,1,modSize}];
+	alphaExp = alphaExp~Join~Table[{Abs[alpha[[i]]],-Arg[alpha[[i]]]}, 
+							{i,1+modSize,Length[alpha]}];
+Print["{}: ",{i,1+modSize,Length[alpha]}];
 	{\[Rho]2max, alphaExp, \[Sigma]2}
 ]
 
