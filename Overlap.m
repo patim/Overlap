@@ -11,7 +11,7 @@ ReadKerrQNM::usage="ReadKerrQNM[l, m, n] loads quasi-normal modes "<>
 "for given l, m and n.";
 Coefficients::usage="";
 \[Rho]2::usage="Calculates the overlap of two waveforms.";
-Protect[Mass,Spin,Theta];
+Protect[Spin,Theta];
 
 Begin["Private`"]
 
@@ -86,9 +86,17 @@ SVDInverse[mat_]:=Module[{u,w,v,invw,small=10^-12,\[Sigma]2},
 ]
 
 
+SVD\[Sigma]2[mat_]:=Module[{u,w,v,invw,small=10^-12,\[Sigma]2},
+	{u,w,v}=SingularValueDecomposition[mat];
+	\[Sigma]2 = Table[Sum[(v[[i,j]]^2/w[[j,j]])^2,{j,1,Length@v}],{i,1,Length@v}];
+	\[Sigma]2
+]
+
+
 Options[Coefficients]=Union[{Mass->0.9,Spin->0.6,Theta->0}, Options@FindMaximum]
 Coefficients[data_,lm_,modes_,pmodes_,it0_,opts : OptionsPattern[]]:=
-	Module[{i,l,m,time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B,\[Delta]max,amax,\[Theta]max,invB,\[Sigma]2,modSize},
+	Module[{i,l,m,time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B,\[Delta]max,amax,\[Theta]max,invB,
+			inv\[Psi]k,\[Sigma]2,modSize,chi2,Ndata,Mvar},
 	For[i=1,i<=Length[lm],i++,
 		l=lm[[i,1]];
 		m=lm[[i,2]];
@@ -107,19 +115,23 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts : OptionsPattern[]]:=
 				time[lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
 	\[Psi] = Flatten[Table[data[[j, 1, i, 2]] + I*data[[j, 1, i, 3]], 
 				{j, 1, Length[data]}, {i,-it0,-1}], 1];
-(*	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];*)
+(*	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
+	\[Sigma]2\[Psi]kmat = SVD\[Sigma]2[\[Psi]kmat];*)
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
 	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
 	
 	(*out = Eigensystem[{Outer[Times,A,Conjugate[A]],B}];*)
 	{invB,\[Sigma]2} = SVDInverse[B];
 	alpha = invB.A;
+	chi2 = Norm[\[Psi]kmat.alpha-\[Psi]]^2;
+
 	modSize = Length[modes];
 	alphaExp = Table[{Abs[alpha[[i]]],Arg[alpha[[i]]]}, {i,1,modSize}];
 	alphaExp = alphaExp~Join~Table[{Abs[alpha[[i]]],-Arg[alpha[[i]]]}, 
 							{i,1+modSize,Length[alpha]}];
-Print["{}: ",{i,1+modSize,Length[alpha]}];
-	{\[Rho]2max, alphaExp, \[Sigma]2}
+	Ndata = 2*Length[\[Psi]];
+	Mvar = 2*Length[alpha];
+	{\[Rho]2max, alphaExp, \[Sigma]2*chi2/(Ndata-Mvar)}
 ]
 
 
