@@ -7,11 +7,16 @@ waveforms (http://journals.aps.org/prd/abstract/10.1103/PhysRevD.84.084012)
 Maxim Zalutskiy, 2015
 *)
 BeginPackage["Overlap`"]
-ReadKerrQNM::usage="ReadKerrQNM[l, m, n] loads quasi-normal modes "<>
-"for given l, m and n.";
-Coefficients::usage="";
-\[Rho]2::usage="Calculates the overlap of two waveforms.";
-Protect[Spin,Theta];
+ReadKerrQNM::usage="ReadKerrQNM[l, m, n] loads quasi-normal modes for given l, m and n.";
+
+Coefficients::usage="Coefficients[data,lm,modes,negmodes,time_)points,"<>
+"FindMaximum_options].\n Produces the output {Maximum of \[Rho]2, {\[Delta],a,\[Theta]}, {{A,\[Phi]},...},"<>
+"{{standard_error_in_A, standard_error_in_\[Phi]},...}}";
+
+\[Rho]2::usage="\[Rho]2[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0].\nCalculates the overlap of two waveforms.";
+OverlapPlot::usage = "OverlapPlot[data,coeffs,lm].\n Plots the overlap."
+MCBootStrap::usage = "MCBootStrap[data,lm,modes,pmodes,Nt,Nstat].";
+Protect[Mass,Spin,Theta,CoeffsDataRand,\[Rho]2DataRand,GTDataRand];
 
 Begin["Private`"]
 
@@ -63,58 +68,93 @@ DefineInterpolations[lm_,modes_,neg_]:=
 ]
 
 
-\[Psi]k[lm_, modes_, pmodes_,\[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg={},l=lm[[1]],m=lm[[2]]},
-	pos = Table[WignerD[{modes[[i, 1]],-m,-modes[[i, 2]]},\[Theta]]*
-				\[ScriptCapitalA][l, modes[[i, 1]], modes[[i, 2]], modes[[i, 3]]][a]*
-				Exp[-I*\[Omega]bar[modes[[i, 1]], modes[[i, 2]], modes[[i, 3]]][a]*t/\[Delta]],
-				{i, 1, Length[modes]}];
+\[Psi]pos[lm_, mode_, \[Delta]_, a_, \[Theta]_, t_] := WignerD[{mode[[1]],-lm[[2]],-mode[[2]]},\[Theta]]*
+				\[ScriptCapitalA][lm[[1]], mode[[1]], mode[[2]], mode[[3]]][a]*
+				Exp[-I*\[Omega]bar[mode[[1]], mode[[2]], mode[[3]]][a]*t/\[Delta]]
+
+
+\[Psi]neg[lm_, pmode_, \[Delta]_, a_, \[Theta]_, t_] := (-1)^(lm[[1]]+pmode[[1]])*
+			   WignerD[{pmode[[1]],-lm[[1]],-pmode[[2]]},\[Theta]]*
+			   Conjugate[\[ScriptCapitalA][lm[[1]], pmode[[1]], -pmode[[2]], pmode[[3]]][a]*
+			   Exp[-I*\[Omega]bar[pmode[[1]], -pmode[[2]], pmode[[3]]][a]*t/\[Delta]]]
+
+
+\[Psi]k[lm_, modes_, pmodes_, \[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg={}},
+	pos = Table[\[Psi]pos[lm,modes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[modes]}];
 	If[Length[pmodes]>0,
-		neg = Table[(-1)^(l+pmodes[[i, 1]])*WignerD[{pmodes[[i, 1]],-m,-pmodes[[i, 2]]},\[Theta]]*
-			   Conjugate[\[ScriptCapitalA][l, pmodes[[i, 1]], -pmodes[[i, 2]], pmodes[[i, 3]]][a]*
-			   Exp[-I*\[Omega]bar[pmodes[[i, 1]], -pmodes[[i, 2]], pmodes[[i, 3]]][a]*t/\[Delta]]], 
-			   {i, 1, Length[pmodes]}];
+		neg = Table[\[Psi]neg[lm,pmodes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[pmodes]}];
 	];
 	pos~Join~neg
+]
+
+
+Clm[lm_, modes_, pmodes_, \[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg=0,msize},
+	msize = Length[modes];
+	(*the first msize amplitutes in \[Alpha] are for the positve modes*)
+	pos = Sum[modes[[i,4]]*Exp[I*modes[[i,5]]]*\[Psi]pos[lm,modes[[i]],\[Delta],a,\[Theta],t], {i, 1, msize}];
+	If[Length[pmodes]>0,
+		neg = Sum[modes[[i+msize,4]]*Exp[I*modes[[i+msize,5]]]*\[Psi]neg[lm,pmodes[[i]],\[Delta],a,\[Theta],t], 
+			  {i, 1, Length[pmodes]}];
+	];
+	pos+neg
 ]
 
 
 SVDInverse[mat_]:=Module[{u,w,v,invw,small=10^-12,\[Sigma]2},
 	{u,w,v}=SingularValueDecomposition[mat];
 	invw=DiagonalMatrix[Table[If[w[[i, i]] > small, 1/w[[i, i]], 0], {i, 1, Length[w]}]];
-	\[Sigma]2 = Table[Sum[invw[[j,j]]*v[[i,j]]^2,{j,1,Length@v}],{i,1,Length@v}];
+	\[Sigma]2 = Table[Sum[invw[[j,j]]*Abs[v[[i,j]]]^2,{j,1,Length@v}],{i,1,Length@v}];
 	{v.invw.ConjugateTranspose[u], \[Sigma]2}
 ]
 
 
 SVD\[Sigma]2[mat_]:=Module[{u,w,v,invw,small=10^-12,\[Sigma]2},
 	{u,w,v}=SingularValueDecomposition[mat];
-	\[Sigma]2 = Table[Sum[(v[[i,j]]^2/w[[j,j]])^2,{j,1,Length@v}],{i,1,Length@v}];
+	\[Sigma]2 = Table[Sum[(Abs[v[[i,j]]]^2/w[[j,j]])^2,{j,1,Length@v}],{i,1,Length@v}];
 	\[Sigma]2
 ]
 
 
-Options[Coefficients]=Union[{Mass->0.9,Spin->0.6,Theta->0}, Options@FindMaximum]
-Coefficients[data_,lm_,modes_,pmodes_,it0_,opts : OptionsPattern[]]:=
-	Module[{i,l,m,time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B,\[Delta]max,amax,\[Theta]max,invB,
-			inv\[Psi]k,\[Sigma]2,modSize,chi2,Ndata,Mvar},
+ErrorConvert[\[Alpha]_, \[Sigma]2_]:=
+	Table[{Sqrt@Abs@\[Sigma]2[[i]], Sqrt[ArcSin[Abs@\[Sigma]2[[i]]/\[Alpha][[i,4]]]]}, 
+	{i,1,Length[\[Sigma]2]}]
+
+
+Options[GetTime]={GTDataRand->False}
+GetTime[data_,lm_,it0_,OptionsPattern[]]:=Module[{i,dati,l,m,time},
+	If[OptionValue[GTDataRand],
+		dati=RandomInteger[{-it0,-1},it0],
+		dati=Range[-it0,-1],dati=Range[-it0,-1]
+	];
 	For[i=1,i<=Length[lm],i++,
 		l=lm[[i,1]];
 		m=lm[[i,2]];
-		time[l,m]=Table[data[[i,1,j,1]],{j,-it0,-1}];
+		time[l,m]=Table[data[[i,1,dati[[j]],1]],{j,1,it0}];
 	];
-	\[Rho]2max = FindMaximum[\[Rho]2[data, lm, modes, pmodes, \[Delta], a, \[Theta], it0], 
+	{time, dati}	
+]
+
+
+
+Options[Coefficients]=Union[{Mass->0.9,Spin->0.6,Theta->0,CoeffsDataRand->False}, Options@FindMaximum]
+Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
+	Module[{time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B, \[Delta]max,amax,\[Theta]max,invB,
+			inv\[Psi]k,\[Sigma]2,modSize,chi2,Ndata,Mvar},
+	
+	time=GetTime[data,lm,it0,GTDataRand->OptionValue[CoeffsDataRand]];
+
+	\[Rho]2max = FindMaximum[\[Rho]2[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0,time], 
 			{{\[Delta],OptionValue[Mass]},{a,OptionValue[Spin]},{\[Theta],OptionValue[Theta]}},
 			Evaluate@FilterRules[{opts},Options@FindMaximum]];
 
-(*Print["\[Rho]2max: ", \[Rho]2max];*)
 	\[Delta]max = \[Rho]2max[[2, 1, 2]];	
 	amax = \[Rho]2max[[2, 2, 2]];
 	\[Theta]max = \[Rho]2max[[2, 3, 2]];
 
 	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta]max, amax, \[Theta]max, #]&/@ 
-				time[lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
-	\[Psi] = Flatten[Table[data[[j, 1, i, 2]] + I*data[[j, 1, i, 3]], 
-				{j, 1, Length[data]}, {i,-it0,-1}], 1];
+				time[[1]][lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
+	\[Psi] = Flatten[Table[data[[j, 1, time[[2,i]], 2]] + I*data[[j, 1, time[[2,i]], 3]], 
+				{j, 1, Length[data]}, {i,1,it0}], 1];
 (*	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
 	\[Sigma]2\[Psi]kmat = SVD\[Sigma]2[\[Psi]kmat];*)
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
@@ -126,41 +166,83 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts : OptionsPattern[]]:=
 	chi2 = Norm[\[Psi]kmat.alpha-\[Psi]]^2;
 
 	modSize = Length[modes];
-	alphaExp = Table[{Abs[alpha[[i]]],Arg[alpha[[i]]]}, {i,1,modSize}];
-	alphaExp = alphaExp~Join~Table[{Abs[alpha[[i]]],-Arg[alpha[[i]]]}, 
-							{i,1+modSize,Length[alpha]}];
+	alphaExp = Table[{modes[[i,1]],modes[[i,2]],modes[[i,3]],Abs[alpha[[i]]],
+					   Arg[alpha[[i]]]}, {i,1,modSize}];
+
+	(*For negative modes pmodes the phase is negative because the whole negative modes
+	expression is conjugated in \[Psi]k*)	
+	alphaExp = alphaExp~Join~Table[{pmodes[[i,1]],pmodes[[i,2]],pmodes[[i,3]],
+									Abs[alpha[[i]]],-Arg[alpha[[i]]]}, 
+									{i,1+modSize,Length[alpha]}];
 	Ndata = 2*Length[\[Psi]];
 	Mvar = 2*Length[alpha];
-	{\[Rho]2max, alphaExp, \[Sigma]2*chi2/(Ndata-Mvar)}
+	{\[Rho]2max, alphaExp, ErrorConvert[alphaExp, \[Sigma]2*chi2/(Ndata-Mvar)]}
 ]
 
 
-\[Rho]2[data_,lm_,modes_,pmodes_,\[Delta]_?NumberQ,a_?NumberQ,\[Theta]_?NumberQ,it0_]:=
-	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi],time,i,l,m},
-	For[i=1,i<=Length[lm],i++,
-		l=lm[[i,1]];
-		m=lm[[i,2]];
-		time[l,m]=Table[data[[i,1,j,1]],{j,-it0,-1}];
+MCBootStrap[data_,lm_,modes_,pmodes_,Nt_,Nstat_]:=Module[{i,coeffs,rcoeffs={},d\[Delta]=0,da=0},
+	coeffs = Coefficients[data,lm,modes,pmodes,Nt,AccuracyGoal->6,
+						Gradient->{"FiniteDifference"}];
+	For[i=1,i<=Nstat,i++,
+		AppendTo[rcoeffs,Coefficients[data,lm,modes,pmodes,Nt,AccuracyGoal->6,
+							Gradient->{"FiniteDifference"},CoeffsDataRand->True]
+		];
+		d\[Delta] += (coeffs[[1,2,1,2]]-rcoeffs[[i,1,2,1,2]])^2;
+		da += (coeffs[[1,2,2,2]]-rcoeffs[[i,1,2,2,2]])^2;	
 	];
+	{rcoeffs,{Sqrt[d\[Delta]],Sqrt[da]}}
+]
+
+
+Options[\[Rho]2] = {\[Rho]2DataRand->False}
+\[Rho]2[data_,lm_,modes_,pmodes_,\[Delta]_?NumberQ,a_?NumberQ,\[Theta]_?NumberQ,it0_,time_,OptionsPattern[]]:=
+	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi](*,time*)},
+
+	(*time = GetTime[data,lm,it0,GTRand\[Rule]OptionValue[\[Rho]2DataRand]];*)	
 	DefineInterpolations[lm,modes,1];
 	DefineInterpolations[lm,pmodes,-1];
 
 	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta], a, \[Theta], #]&/@ 
-				time[lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
-(*Print["\[Psi]kmat: ",\[Psi]kmat];*)
-	\[Psi] = Flatten[Table[data[[j, 1, i, 2]] + I*data[[j, 1, i, 3]], 
-				{j, 1, Length[data]}, {i,-it0, -1}], 1];
+				time[[1]][lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
+
+	\[Psi] = Flatten[Table[data[[j, 1, time[[2,i]], 2]] + I*data[[j, 1, time[[2,i]], 3]], 
+				{j, 1, Length[data]}, {i,1, it0}], 1];
 	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
-(*Print["A= ", A];*)
 	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
-(*Print["B=",B];*)
+
 	out = Re[Conjugate[A].SVDInverse[B][[1]].A/\[Psi]\[Psi]];
-	out
-	
+
 	(*This speeds up the calculations, but one must be careful with it*)
-	(*\[Rho]2max[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0] = out;
-	out*)
+	(*\[Rho]2max[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0] = out;*)
+	out
+]
+
+
+OverlapPlot::nodata="cannot find a plot for mode `1`";
+Options[OverlapPlot]=Union[{}, Options@Plot]
+OverlapPlot[data_,coeffs_,lm_,opts:OptionsPattern[]]:=Module[{rdata,idata,size,datasize,i,dataCnum,rlp,pr,\[Delta],a,\[Theta]},
+	
+	datasize=Length[data];
+	For[i=1,i<=datasize,i++,
+		If[data[[i,2,1]]==lm[[1]] && data[[i,2,2]]==lm[[2]],
+			dataCnum=i;Break[];
+		];
+	(*Got to the end of the list, but the requested mode is not there*)
+	If[i==datasize,Message[OverlapPlot::nodata,lm];Return[]];
+	];
+
+	size=Length[data[[dataCnum,1]]];
+	rdata=Table[{data[[dataCnum,1,i,1]],data[[dataCnum,1,i,2]]},{i,1,size}];
+	idata=Table[{data[[dataCnum,1,i,1]],data[[dataCnum,1,i,3]]},{i,1,size}];
+	
+	\[Delta] = coeffs[[1,2,1,2]];
+	a = coeffs[[1,2,2,2]];
+	rlp = ListPlot[rdata];
+
+	pr = Plot[Re[Clm[lm, coeffs[[2]], {}, \[Delta], a, 0, t]], {t,0,80}, PlotStyle->Red,
+			   Axes->False,Frame->True,Evaluate@FilterRules[{opts},Options@Plot]];
+	Show[pr,rlp]
 ]
 
 
