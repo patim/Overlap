@@ -16,6 +16,8 @@ Coefficients::usage="Coefficients[data,lm,modes,negmodes,time_)points,"<>
 \[Rho]2::usage="\[Rho]2[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0].\nCalculates the overlap of two waveforms.";
 OverlapPlot::usage = "OverlapPlot[data,coeffs,lm].\n Plots the overlap."
 MCBootStrap::usage = "MCBootStrap[data,lm,modes,pmodes,Nt,Nstat].";
+GetTime::usage = "";
+MaxOverlap::usage = "";
 Protect[Mass,Spin,Theta,CoeffsDataRand,\[Rho]2DataRand,GTDataRand];
 
 Begin["Private`"]
@@ -51,7 +53,7 @@ DefineInterpolations[lm_,modes_,neg_]:=
 			Re\[Omega][i_]:=QNMdata[[i,2]];
 			Im\[Omega][i_]:=QNMdata[[i,3]];
 			spin[i_]:=QNMdata[[i,1]];
-			\[Omega]bar[ll,mm,nn]=
+			\[Omega]bar[ll,mm,nn] = 
 				Interpolation[Table[{spin[j],Re\[Omega][j]+I*Im\[Omega][j]},{j,1,QNMsize}]];
 		]
 		For[k=1,k<=lmsize,++k,
@@ -74,7 +76,7 @@ DefineInterpolations[lm_,modes_,neg_]:=
 
 
 \[Psi]neg[lm_, pmode_, \[Delta]_, a_, \[Theta]_, t_] := (-1)^(lm[[1]]+pmode[[1]])*
-			   WignerD[{pmode[[1]],-lm[[1]],-pmode[[2]]},\[Theta]]*
+			   WignerD[{pmode[[1]],-lm[[2]],-pmode[[2]]},\[Theta]]*
 			   Conjugate[\[ScriptCapitalA][lm[[1]], pmode[[1]], -pmode[[2]], pmode[[3]]][a]*
 			   Exp[-I*\[Omega]bar[pmode[[1]], -pmode[[2]], pmode[[3]]][a]*t/\[Delta]]]
 
@@ -136,12 +138,22 @@ GetTime[data_,lm_,it0_,OptionsPattern[]]:=Module[{i,dati,l,m,time},
 
 
 
-Options[Coefficients]=Union[{Mass->0.9,Spin->0.6,Theta->0,CoeffsDataRand->False}, Options@FindMaximum]
+Options[MaxOverlap]=Union[{Mass->0.9,Spin->0.6,Theta->0}, Options@FindMaximum]
+MaxOverlap[data_,lm_,modes_,pmodes_,t0_,opts:OptionsPattern[]]:=Module[{time},
+	time = GetTime[data,lm,t0];
+	FindMaximum[\[Rho]2[data, lm, modes, pmodes, \[Delta], a, \[Theta], t0, time], 
+	{{\[Delta], OptionValue[Mass]}, {a, OptionValue[Spin]}, {\[Theta], OptionValue[Theta]}}, 
+	Evaluate@FilterRules[{opts},Options@FindMaximum]]
+]
+
+
+Options[Coefficients] = 
+	Union[{Mass->0.9,Spin->0.6,Theta->0,CoeffsDataRand->False}, Options@FindMaximum]
 Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 	Module[{time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B, \[Delta]max,amax,\[Theta]max,invB,
 			inv\[Psi]k,\[Sigma]2,modSize,chi2,Ndata,Mvar},
 	
-	time=GetTime[data,lm,it0,GTDataRand->OptionValue[CoeffsDataRand]];
+	time = GetTime[data,lm,it0,GTDataRand->OptionValue[CoeffsDataRand]];
 
 	\[Rho]2max = FindMaximum[\[Rho]2[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0,time], 
 			{{\[Delta],OptionValue[Mass]},{a,OptionValue[Spin]},{\[Theta],OptionValue[Theta]}},
@@ -163,6 +175,7 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 	(*out = Eigensystem[{Outer[Times,A,Conjugate[A]],B}];*)
 	{invB,\[Sigma]2} = SVDInverse[B];
 	alpha = invB.A;
+
 	chi2 = Norm[\[Psi]kmat.alpha-\[Psi]]^2;
 
 	modSize = Length[modes];
@@ -170,35 +183,44 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 					   Arg[alpha[[i]]]}, {i,1,modSize}];
 
 	(*For negative modes pmodes the phase is negative because the whole negative modes
-	expression is conjugated in \[Psi]k*)	
+	expression is conjugated in \[Psi]k*)
 	alphaExp = alphaExp~Join~Table[{pmodes[[i,1]],pmodes[[i,2]],pmodes[[i,3]],
-									Abs[alpha[[i]]],-Arg[alpha[[i]]]}, 
-									{i,1+modSize,Length[alpha]}];
+									Abs[alpha[[modSize+i]]],-Arg[alpha[[modSize+i]]]}, 
+									{i,1,Length[pmodes]}];
 	Ndata = 2*Length[\[Psi]];
 	Mvar = 2*Length[alpha];
 	{\[Rho]2max, alphaExp, ErrorConvert[alphaExp, \[Sigma]2*chi2/(Ndata-Mvar)]}
 ]
 
 
-MCBootStrap[data_,lm_,modes_,pmodes_,Nt_,Nstat_]:=Module[{i,coeffs,rcoeffs={},d\[Delta]=0,da=0},
+MCBootStrap[data_,lm_,modes_,pmodes_,Nt_,Nstat_]:=
+Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,err=0},
+
 	coeffs = Coefficients[data,lm,modes,pmodes,Nt,AccuracyGoal->6,
 						Gradient->{"FiniteDifference"}];
 	For[i=1,i<=Nstat,i++,
-		AppendTo[rcoeffs,Coefficients[data,lm,modes,pmodes,Nt,AccuracyGoal->6,
-							Gradient->{"FiniteDifference"},CoeffsDataRand->True]
-		];
-		d\[Delta] += (coeffs[[1,2,1,2]]-rcoeffs[[i,1,2,1,2]])^2;
-		da += (coeffs[[1,2,2,2]]-rcoeffs[[i,1,2,2,2]])^2;	
+		coeffsentry = Quiet[Check[Coefficients[data,lm,modes,pmodes,Nt,AccuracyGoal->6,
+							(*WorkingPrecision\[Rule]48*)Gradient->{"FiniteDifference"},
+							CoeffsDataRand->True],False]];
+
+		If[Head[coeffsentry]==List, 
+			Print[i,", coeffsentry=",coeffsentry];
+			AppendTo[rcoeffs, coeffsentry];
+			d\[Delta] += (coeffs[[1,2,1,2]]-coeffsentry[[1,2,1,2]])^2;
+			da += (coeffs[[1,2,2,2]]-coeffsentry[[1,2,2,2]])^2;
+			,Null(*empty*)
+			,i--(*Coefficients function failed, repeat the iteration*)
+		];	
 	];
-	{rcoeffs,{Sqrt[d\[Delta]],Sqrt[da]}}
+	{rcoeffs,{Sqrt[d\[Delta]/Nstat],Sqrt[da/Nstat]}}
 ]
 
 
 Options[\[Rho]2] = {\[Rho]2DataRand->False}
 \[Rho]2[data_,lm_,modes_,pmodes_,\[Delta]_?NumberQ,a_?NumberQ,\[Theta]_?NumberQ,it0_,time_,OptionsPattern[]]:=
-	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi](*,time*)},
-
-	(*time = GetTime[data,lm,it0,GTRand\[Rule]OptionValue[\[Rho]2DataRand]];*)	
+	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi]},
+	
+(*	time2 = GetTime[data,lm,it0,GTDataRand\[Rule]OptionValue[\[Rho]2DataRand]];*)
 	DefineInterpolations[lm,modes,1];
 	DefineInterpolations[lm,pmodes,-1];
 
@@ -221,7 +243,8 @@ Options[\[Rho]2] = {\[Rho]2DataRand->False}
 
 OverlapPlot::nodata="cannot find a plot for mode `1`";
 Options[OverlapPlot]=Union[{}, Options@Plot]
-OverlapPlot[data_,coeffs_,lm_,opts:OptionsPattern[]]:=Module[{rdata,idata,size,datasize,i,dataCnum,rlp,pr,\[Delta],a,\[Theta]},
+OverlapPlot[data_,coeffs_,lm_,opts:OptionsPattern[]]:=
+Module[{rdata,idata,size,datasize,i,dataCnum,rlp,pr,\[Delta],a,\[Theta]},
 	
 	datasize=Length[data];
 	For[i=1,i<=datasize,i++,
