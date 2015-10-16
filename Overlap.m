@@ -16,7 +16,7 @@ Coefficients::usage="Coefficients[data,lm,modes,negmodes,time_)points,"<>
 \[Rho]2::usage="\[Rho]2[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0].\nCalculates the overlap of two waveforms.";
 OverlapPlot::usage = "OverlapPlot[data,coeffs,lm].\n Plots the overlap."
 MCBootStrap::usage = "MCBootStrap[data,lm,modes,pmodes,Nt,Nstat].";
-GetTime::usage = "";
+MCBootStrapCError::usage = "";
 MaxOverlap::usage = "";
 Protect[Mass,Spin,Theta,CoeffsDataRand,\[Rho]2DataRand,GTDataRand];
 
@@ -194,7 +194,7 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 
 
 MCBootStrap[data_,lm_,modes_,pmodes_,Nt_,Nstat_]:=
-Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,err=0},
+Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,d\[Theta]=0,err=0},
 
 	coeffs = Coefficients[data,lm,modes,pmodes,Nt,AccuracyGoal->6,
 						Gradient->{"FiniteDifference"}];
@@ -208,11 +208,25 @@ Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,err=0},
 			AppendTo[rcoeffs, coeffsentry];
 			d\[Delta] += (coeffs[[1,2,1,2]]-coeffsentry[[1,2,1,2]])^2;
 			da += (coeffs[[1,2,2,2]]-coeffsentry[[1,2,2,2]])^2;
+			d\[Theta] += (coeffs[[1,2,3,2]]-coeffsentry[[1,2,3,2]])^2;
 			,Null(*empty*)
 			,i--(*Coefficients function failed, repeat the iteration*)
 		];	
 	];
-	{rcoeffs,{Sqrt[d\[Delta]/Nstat],Sqrt[da/Nstat]}}
+	{rcoeffs,{Sqrt[d\[Delta]/Nstat],Sqrt[da/Nstat],Sqrt[d\[Theta]/Nstat]}}
+]
+
+
+MCBootStrapCError[coeffs_,mc_]:=Module[{i,cffs,cSize,dcffs,Nstat},
+	cffs = coeffs[[2]];
+	cSize = Length@cffs;
+	dcffs = Table[0,{i,1,cSize}];
+	Nstat = Length[mc[[1]]];
+	For[i=1,i<=Nstat,i++,
+		dcffs += Table[{(mc[[1,i,2,j,4]]-cffs[[j,4]])^2,
+						(mc[[1,i,2,j,5]]-cffs[[j,5]])^2},{j,1,cSize}];
+	];
+	Sqrt[dcffs]/Nstat
 ]
 
 
