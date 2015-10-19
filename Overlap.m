@@ -117,11 +117,6 @@ SVD\[Sigma]2[mat_]:=Module[{u,w,v,invw,small=10^-12,\[Sigma]2},
 ]
 
 
-ErrorConvert[\[Alpha]_, \[Sigma]2_]:=
-	Table[{Sqrt@Abs@\[Sigma]2[[i]], Sqrt[ArcSin[Abs@\[Sigma]2[[i]]/\[Alpha][[i,4]]]]}, 
-	{i,1,Length[\[Sigma]2]}]
-
-
 Options[GetTime]={GTDataRand->False}
 GetTime[data_,lm_,it0_,OptionsPattern[]]:=Module[{i,dati,l,m,time},
 	If[OptionValue[GTDataRand],
@@ -193,6 +188,11 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 ]
 
 
+ErrorConvert[\[Alpha]_, \[Sigma]2_]:=
+	Table[{Sqrt@Abs@\[Sigma]2[[i]], Sqrt[ArcSin[Abs@\[Sigma]2[[i]]/\[Alpha][[i,4]]]]}, 
+	{i,1,Length[\[Sigma]2]}]
+
+
 MCBootStrap[data_,lm_,modes_,pmodes_,Nt_,Nstat_]:=
 Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,d\[Theta]=0,err=0},
 
@@ -226,7 +226,7 @@ MCBootStrapCError[coeffs_,mc_]:=Module[{i,cffs,cSize,dcffs,Nstat},
 		dcffs += Table[{(mc[[1,i,2,j,4]]-cffs[[j,4]])^2,
 						(mc[[1,i,2,j,5]]-cffs[[j,5]])^2},{j,1,cSize}];
 	];
-	Sqrt[dcffs]/Nstat
+	Sqrt[dcffs/Nstat]
 ]
 
 
