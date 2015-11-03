@@ -18,6 +18,7 @@ OverlapPlot::usage = "OverlapPlot[data,coeffs,lm].\n Plots the overlap."
 MCBootStrap::usage = "MCBootStrap[data,lm,modes,pmodes,Nt,Nstat].";
 MCBootStrapCError::usage = "";
 MaxOverlap::usage = "";
+GetTime::usage = "";
 Protect[Mass,Spin,Theta,CoeffsDataRand,\[Rho]2DataRand,GTDataRand];
 
 Begin["Private`"]
@@ -82,6 +83,7 @@ DefineInterpolations[lm_,modes_,neg_]:=
 
 
 \[Psi]k[lm_, modes_, pmodes_, \[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg={}},
+(*Print["\[Psi]k:3"];*)
 	pos = Table[\[Psi]pos[lm,modes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[modes]}];
 	If[Length[pmodes]>0,
 		neg = Table[\[Psi]neg[lm,pmodes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[pmodes]}];
@@ -204,7 +206,7 @@ Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,d\[Theta]=0,err=0},
 							CoeffsDataRand->True],False]];
 
 		If[Head[coeffsentry]==List, 
-			Print[i,", coeffsentry=",coeffsentry];
+			Print["Gamble: ", i];
 			AppendTo[rcoeffs, coeffsentry];
 			d\[Delta] += (coeffs[[1,2,1,2]]-coeffsentry[[1,2,1,2]])^2;
 			da += (coeffs[[1,2,2,2]]-coeffsentry[[1,2,2,2]])^2;
@@ -243,6 +245,7 @@ Options[\[Rho]2] = {\[Rho]2DataRand->False}
 
 	\[Psi] = Flatten[Table[data[[j, 1, time[[2,i]], 2]] + I*data[[j, 1, time[[2,i]], 3]], 
 				{j, 1, Length[data]}, {i,1, it0}], 1];
+
 	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
 	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
