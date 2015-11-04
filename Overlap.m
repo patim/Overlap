@@ -122,6 +122,7 @@ SVD\[Sigma]2[mat_]:=Module[{u,w,v,invw,small=10^-12,\[Sigma]2},
 Options[GetTime]={GTDataRand->False}
 GetTime[data_,lm_,it0_,OptionsPattern[]]:=Module[{i,dati,l,m,time},
 	If[OptionValue[GTDataRand],
+		(*random indexing*)
 		dati=RandomInteger[{-it0,-1},it0],
 		dati=Range[-it0,-1],dati=Range[-it0,-1]
 	];
@@ -144,13 +145,17 @@ MaxOverlap[data_,lm_,modes_,pmodes_,t0_,opts:OptionsPattern[]]:=Module[{time},
 ]
 
 
+DataIndex[data_,lm_]:=Table[Position[data,lm[[i]]][[1,1]],{i,1,Length[lm]}]
+
+
 Options[Coefficients] = 
 	Union[{Mass->0.9,Spin->0.6,Theta->0,CoeffsDataRand->False}, Options@FindMaximum]
 Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 	Module[{time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B, \[Delta]max,amax,\[Theta]max,invB,
-			inv\[Psi]k,\[Sigma]2,modSize,chi2,Ndata,Mvar},
+			inv\[Psi]k,\[Sigma]2,modSize,chi2,Ndata,Mvar,dind},
 	
 	time = GetTime[data,lm,it0,GTDataRand->OptionValue[CoeffsDataRand]];
+	dind = DataIndex[data,lm];
 
 	\[Rho]2max = FindMaximum[\[Rho]2[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0,time], 
 			{{\[Delta],OptionValue[Mass]},{a,OptionValue[Spin]},{\[Theta],OptionValue[Theta]}},
@@ -162,8 +167,8 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 
 	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta]max, amax, \[Theta]max, #]&/@ 
 				time[[1]][lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
-	\[Psi] = Flatten[Table[data[[j, 1, time[[2,i]], 2]] + I*data[[j, 1, time[[2,i]], 3]], 
-				{j, 1, Length[data]}, {i,1,it0}], 1];
+	\[Psi] = Flatten[Table[data[[dind[[j]], 1, time[[2,i]], 2]] + I*data[[dind[[j]], 
+				1, time[[2,i]], 3]], {j, 1, Length[dind]}, {i,1,it0}], 1];
 (*	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
 	\[Sigma]2\[Psi]kmat = SVD\[Sigma]2[\[Psi]kmat];*)
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
@@ -234,7 +239,7 @@ MCBootStrapCError[coeffs_,mc_]:=Module[{i,cffs,cSize,dcffs,Nstat},
 
 Options[\[Rho]2] = {\[Rho]2DataRand->False}
 \[Rho]2[data_,lm_,modes_,pmodes_,\[Delta]_?NumberQ,a_?NumberQ,\[Theta]_?NumberQ,it0_,time_,OptionsPattern[]]:=
-	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi]},
+	Module[{A,B,out,\[Psi]kmat,\[Psi],\[Psi]\[Psi],dind},
 	
 (*	time2 = GetTime[data,lm,it0,GTDataRand\[Rule]OptionValue[\[Rho]2DataRand]];*)
 	DefineInterpolations[lm,modes,1];
@@ -243,8 +248,9 @@ Options[\[Rho]2] = {\[Rho]2DataRand->False}
 	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta], a, \[Theta], #]&/@ 
 				time[[1]][lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
 
-	\[Psi] = Flatten[Table[data[[j, 1, time[[2,i]], 2]] + I*data[[j, 1, time[[2,i]], 3]], 
-				{j, 1, Length[data]}, {i,1, it0}], 1];
+	dind = DataIndex[data,lm];
+	\[Psi] = Flatten[Table[data[[dind[[j]], 1, time[[2,i]], 2]] + I*data[[dind[[j]], 1, time[[2,i]], 3]], 
+				{j, 1, Length[dind]}, {i,1, it0}], 1];
 
 	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
