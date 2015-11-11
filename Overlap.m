@@ -71,33 +71,37 @@ DefineInterpolations[lm_,modes_,neg_]:=
 ]
 
 
-\[Psi]pos[lm_, mode_, \[Delta]_, a_, \[Theta]_, t_] := WignerD[{mode[[1]],-lm[[2]],-mode[[2]]},\[Theta]]*
-				\[ScriptCapitalA][lm[[1]], mode[[1]], mode[[2]], mode[[3]]][a]*
-				Exp[-I*\[Omega]bar[mode[[1]], mode[[2]], mode[[3]]][a]*t/\[Delta]]
+\[Psi]pos[l_, m_, mode_, \[Delta]_, a_, \[Theta]_, t_] := 
+	If[mode[[1]] >= Abs@m,
+		WignerD[{mode[[1]],-m,-mode[[2]]},\[Theta]]*
+		\[ScriptCapitalA][l, mode[[1]], mode[[2]], mode[[3]]][a]*
+		Exp[-I*\[Omega]bar[mode[[1]], mode[[2]], mode[[3]]][a]*t/\[Delta]]
+	,0]
 
 
-\[Psi]neg[lm_, pmode_, \[Delta]_, a_, \[Theta]_, t_] := (-1)^(lm[[1]]+pmode[[1]])*
-			   WignerD[{pmode[[1]],-lm[[2]],-pmode[[2]]},\[Theta]]*
-			   Conjugate[\[ScriptCapitalA][lm[[1]], pmode[[1]], -pmode[[2]], pmode[[3]]][a]*
-			   Exp[-I*\[Omega]bar[pmode[[1]], -pmode[[2]], pmode[[3]]][a]*t/\[Delta]]]
+\[Psi]neg[l_, m_, pmode_, \[Delta]_, a_, \[Theta]_, t_] := 
+	If[pmode[[1]] >= Abs@m,	
+		(-1)^(l+pmode[[1]])*WignerD[{pmode[[1]],-m,-pmode[[2]]},\[Theta]]*
+		Conjugate[\[ScriptCapitalA][l, pmode[[1]], -pmode[[2]], pmode[[3]]][a]*
+		Exp[-I*\[Omega]bar[pmode[[1]], -pmode[[2]], pmode[[3]]][a]*t/\[Delta]]]
+	,0]
 
 
-\[Psi]k[lm_, modes_, pmodes_, \[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg={}},
-(*Print["\[Psi]k:3"];*)
-	pos = Table[\[Psi]pos[lm,modes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[modes]}];
+\[Psi]k[l_, m_, modes_, pmodes_, \[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg={}},
+	pos = Table[\[Psi]pos[l,m,modes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[modes]}];
 	If[Length[pmodes]>0,
-		neg = Table[\[Psi]neg[lm,pmodes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[pmodes]}];
+		neg = Table[\[Psi]neg[l,m,pmodes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[pmodes]}];
 	];
 	pos~Join~neg
 ]
 
 
-Clm[lm_, modes_, pmodes_, \[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg=0,msize},
+Clm[l_, m_, modes_, pmodes_, \[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg=0,msize},
 	msize = Length[modes];
 	(*the first msize amplitutes in \[Alpha] are for the positve modes*)
-	pos = Sum[modes[[i,4]]*Exp[I*modes[[i,5]]]*\[Psi]pos[lm,modes[[i]],\[Delta],a,\[Theta],t], {i, 1, msize}];
+	pos = Sum[modes[[i,4]]*Exp[I*modes[[i,5]]]*\[Psi]pos[l,m,modes[[i]],\[Delta],a,\[Theta],t], {i, 1, msize}];
 	If[Length[pmodes]>0,
-		neg = Sum[modes[[i+msize,4]]*Exp[I*modes[[i+msize,5]]]*\[Psi]neg[lm,pmodes[[i]],\[Delta],a,\[Theta],t], 
+		neg = Sum[modes[[i+msize,4]]*Exp[I*modes[[i+msize,5]]]*\[Psi]neg[l,m,pmodes[[i]],\[Delta],a,\[Theta],t], 
 			  {i, 1, Length[pmodes]}];
 	];
 	pos+neg
@@ -151,8 +155,8 @@ DataIndex[data_,lm_]:=Table[Position[data,lm[[i]]][[1,1]],{i,1,Length[lm]}]
 Options[Coefficients] = 
 	Union[{Mass->0.9,Spin->0.6,Theta->0,CoeffsDataRand->False}, Options@FindMaximum]
 Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
-	Module[{time,\[Rho]2max,alpha,alphaExp,\[Psi]kmat,\[Psi],A,B, \[Delta]max,amax,\[Theta]max,invB,
-			inv\[Psi]k,\[Sigma]2,modSize,chi2,Ndata,Mvar,dind},
+	Module[{time,\[Rho]2max,alpha,alphaExpPos,alphaExpNeg,\[Psi]kmat,\[Psi],A,B, \[Delta]max,amax,\[Theta]max,invB,
+			inv\[Psi]k,\[Sigma]2,modSize,chi2,Ndata,MvarPos,MvarNeg,dind},
 	
 	time = GetTime[data,lm,it0,GTDataRand->OptionValue[CoeffsDataRand]];
 	dind = DataIndex[data,lm];
@@ -165,12 +169,13 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 	amax = \[Rho]2max[[2, 2, 2]];
 	\[Theta]max = \[Rho]2max[[2, 3, 2]];
 
-	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta]max, amax, \[Theta]max, #]&/@ 
+	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i,1]], lm[[i,2]], modes, pmodes, \[Delta]max, amax, \[Theta]max, #]&/@ 
 				time[[1]][lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
 	\[Psi] = Flatten[Table[data[[dind[[j]], 1, time[[2,i]], 2]] + I*data[[dind[[j]], 
 				1, time[[2,i]], 3]], {j, 1, Length[dind]}, {i,1,it0}], 1];
 (*	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
 	\[Sigma]2\[Psi]kmat = SVD\[Sigma]2[\[Psi]kmat];*)
+
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
 	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
 	
@@ -181,27 +186,29 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 	chi2 = Norm[\[Psi]kmat.alpha-\[Psi]]^2;
 
 	modSize = Length[modes];
-	alphaExp = Table[{modes[[i,1]],modes[[i,2]],modes[[i,3]],Abs[alpha[[i]]],
+	alphaExpPos = Table[{modes[[i,1]],modes[[i,2]],modes[[i,3]],Abs[alpha[[i]]],
 					   Arg[alpha[[i]]]}, {i,1,modSize}];
 
 	(*For negative modes pmodes the phase is negative because the whole negative modes
 	expression is conjugated in \[Psi]k*)
-	alphaExp = alphaExp~Join~Table[{pmodes[[i,1]],pmodes[[i,2]],pmodes[[i,3]],
+	alphaExpNeg = Table[{pmodes[[i,1]],pmodes[[i,2]],pmodes[[i,3]],
 									Abs[alpha[[modSize+i]]],-Arg[alpha[[modSize+i]]]}, 
 									{i,1,Length[pmodes]}];
 	Ndata = 2*Length[\[Psi]];
-	Mvar = 2*Length[alpha];
-	{\[Rho]2max, alphaExp, ErrorConvert[alphaExp, \[Sigma]2*chi2/(Ndata-Mvar)]}
+	MvarPos = 2*Length[modes];
+	MvarNeg = 2*Length[pmodes];
+	{\[Rho]2max, alphaExpPos, alphaExpNeg, ErrorConvert[alphaExpPos, \[Sigma]2*chi2/(Ndata-MvarPos)],
+	ErrorConvert[alphaExpNeg, \[Sigma]2*chi2/(Ndata-MvarNeg)]}
 ]
 
 
 ErrorConvert[\[Alpha]_, \[Sigma]2_]:=
 	Table[{Sqrt@Abs@\[Sigma]2[[i]], Sqrt[ArcSin[Abs@\[Sigma]2[[i]]/\[Alpha][[i,4]]]]}, 
-	{i,1,Length[\[Sigma]2]}]
+	{i,1,Length[\[Alpha]]}]
 
 
 MCBootStrap[data_,lm_,modes_,pmodes_,Nt_,Nstat_]:=
-Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,d\[Theta]=0,err=0},
+Module[{i,coeffs,coeffsentry,mccoeffs={},d\[Delta]=0,da=0,d\[Theta]=0,err=0},
 
 	coeffs = Coefficients[data,lm,modes,pmodes,Nt,AccuracyGoal->6,
 						Gradient->{"FiniteDifference"}];
@@ -212,7 +219,7 @@ Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,d\[Theta]=0,err=0},
 
 		If[Head[coeffsentry]==List, 
 			Print["Gamble: ", i];
-			AppendTo[rcoeffs, coeffsentry];
+			AppendTo[mccoeffs, coeffsentry];
 			d\[Delta] += (coeffs[[1,2,1,2]]-coeffsentry[[1,2,1,2]])^2;
 			da += (coeffs[[1,2,2,2]]-coeffsentry[[1,2,2,2]])^2;
 			d\[Theta] += (coeffs[[1,2,3,2]]-coeffsentry[[1,2,3,2]])^2;
@@ -220,7 +227,7 @@ Module[{i,coeffs,coeffsentry,rcoeffs={},d\[Delta]=0,da=0,d\[Theta]=0,err=0},
 			,i--(*Coefficients function failed, repeat the iteration*)
 		];	
 	];
-	{rcoeffs,{Sqrt[d\[Delta]/Nstat],Sqrt[da/Nstat],Sqrt[d\[Theta]/Nstat]}}
+	{mccoeffs,{Sqrt[d\[Delta]/Nstat],Sqrt[da/Nstat],Sqrt[d\[Theta]/Nstat]}~Join~MCBootStrapCError[coeffs,mccoeffs]}
 ]
 
 
@@ -228,10 +235,10 @@ MCBootStrapCError[coeffs_,mc_]:=Module[{i,cffs,cSize,dcffs,Nstat},
 	cffs = coeffs[[2]];
 	cSize = Length@cffs;
 	dcffs = Table[0,{i,1,cSize}];
-	Nstat = Length[mc[[1]]];
+	Nstat = Length[mc];
 	For[i=1,i<=Nstat,i++,
-		dcffs += Table[{(mc[[1,i,2,j,4]]-cffs[[j,4]])^2,
-						(mc[[1,i,2,j,5]]-cffs[[j,5]])^2},{j,1,cSize}];
+		dcffs += Table[{(mc[[i,2,j,4]]-cffs[[j,4]])^2,
+						(mc[[i,2,j,5]]-cffs[[j,5]])^2},{j,1,cSize}];
 	];
 	Sqrt[dcffs/Nstat]
 ]
@@ -245,7 +252,7 @@ Options[\[Rho]2] = {\[Rho]2DataRand->False}
 	DefineInterpolations[lm,modes,1];
 	DefineInterpolations[lm,pmodes,-1];
 
-	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i]], modes, pmodes, \[Delta], a, \[Theta], #]&/@ 
+	\[Psi]kmat = Flatten[Table[\[Psi]k[lm[[i,1]], lm[[i,2]], modes, pmodes, \[Delta], a, \[Theta], #]&/@ 
 				time[[1]][lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
 
 	dind = DataIndex[data,lm];
@@ -284,10 +291,11 @@ Module[{rdata,idata,size,datasize,i,dataCnum,rlp,pr,\[Delta],a,\[Theta]},
 	
 	\[Delta] = coeffs[[1,2,1,2]];
 	a = coeffs[[1,2,2,2]];
+	\[Theta] = coeffs[[1,2,2,2]];
 	rlp = ListPlot[rdata];
 
-	pr = Plot[Re[Clm[lm, coeffs[[2]], {}, \[Delta], a, 0, t]], {t,0,80}, PlotStyle->Red,
-			   Axes->False,Frame->True,Evaluate@FilterRules[{opts},Options@Plot]];
+	pr = Plot[Re[Clm[lm[[1]], lm[[2]], coeffs[[2]], coeffs[[3]], \[Delta], a, \[Theta], t]], {t,0,150}, 
+			  PlotStyle->Red, Axes->False,Frame->True,Evaluate@FilterRules[{opts},Options@Plot]];
 	Show[pr,rlp]
 ]
 
