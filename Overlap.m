@@ -19,7 +19,13 @@ MCBootStrap::usage = "MCBootStrap[data,lm,modes,pmodes,Nt,Nstat].";
 MCBootStrapCError::usage = "";
 MaxOverlap::usage = "";
 GetTime::usage = "";
-Protect[Mass,Spin,Theta,CoeffsDataRand,\[Rho]2DataRand,GTDataRand];
+RDparamsVst0::usage = "RDparamsVst0[data,lm,modes,negmodes,n1,nN]";
+Plotrho2maxVst0::usage = "Plotrho2maxVst0[overlapdata,ListPlot_options]";
+PlotMassVst0::usage = "PlotMassVst0[overlapdata, opts:OptionsPattern[]]";
+PlotSpinVst0::usage = "PlotSpinVst0[overlapdata, opts:OptionsPattern[]]";
+PlotThetaVst0::usage = "";
+RDparamsVst0Subs::usage = "RDparamsVst0Subs[data,lm,modes,negmodes,n1,nN,p1,p2]";
+Protect[Mass,Spin,Theta,\[Theta],CoeffsDataRand,\[Rho]2DataRand,GTDataRand];
 
 Begin["Private`"]
 
@@ -101,8 +107,8 @@ Clm[l_, m_, modes_, pmodes_, \[Delta]_, a_, \[Theta]_, t_] := Module[{pos,neg=0,
 	(*the first msize amplitutes in \[Alpha] are for the positve modes*)
 	pos = Sum[modes[[i,4]]*Exp[I*modes[[i,5]]]*\[Psi]pos[l,m,modes[[i]],\[Delta],a,\[Theta],t], {i, 1, msize}];
 	If[Length[pmodes]>0,
-		neg = Sum[modes[[i+msize,4]]*Exp[I*modes[[i+msize,5]]]*\[Psi]neg[l,m,pmodes[[i]],\[Delta],a,\[Theta],t], 
-			  {i, 1, Length[pmodes]}];
+		neg = Sum[modes[[i+msize,4]]*Exp[I*modes[[i+msize,5]]]
+				  *\[Psi]neg[l,m,pmodes[[i]],\[Delta],a,\[Theta],t], {i, 1, Length[pmodes]}];
 	];
 	pos+neg
 ]
@@ -161,7 +167,7 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 	time = GetTime[data,lm,it0,GTDataRand->OptionValue[CoeffsDataRand]];
 	dind = DataIndex[data,lm];
 
-	\[Rho]2max = FindMaximum[\[Rho]2[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0,time], 
+	\[Rho]2max = FindMaximum[\[Rho]2[data,lm,modes,pmodes,Overlap`\[Delta],Overlap`a,Overlap`\[Theta],it0,time], 
 			{{\[Delta],OptionValue[Mass]},{a,OptionValue[Spin]},{\[Theta],OptionValue[Theta]}},
 			Evaluate@FilterRules[{opts},Options@FindMaximum]];
 
@@ -183,7 +189,7 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 	{invB,\[Sigma]2} = SVDInverse[B];
 	alpha = invB.A;
 
-	chi2 = Norm[\[Psi]kmat.alpha-\[Psi]]^2;
+	(*chi2 = Norm[\[Psi]kmat.alpha-\[Psi]]^2;*)
 
 	modSize = Length[modes];
 	alphaExpPos = Table[{modes[[i,1]],modes[[i,2]],modes[[i,3]],Abs[alpha[[i]]],
@@ -194,11 +200,12 @@ Coefficients[data_,lm_,modes_,pmodes_,it0_,opts:OptionsPattern[]]:=
 	alphaExpNeg = Table[{pmodes[[i,1]],pmodes[[i,2]],pmodes[[i,3]],
 									Abs[alpha[[modSize+i]]],-Arg[alpha[[modSize+i]]]}, 
 									{i,1,Length[pmodes]}];
-	Ndata = 2*Length[\[Psi]];
+	(*Ndata = 2*Length[\[Psi]];
 	MvarPos = 2*Length[modes];
-	MvarNeg = 2*Length[pmodes];
-	{\[Rho]2max, alphaExpPos, alphaExpNeg, ErrorConvert[alphaExpPos, \[Sigma]2*chi2/(Ndata-MvarPos)],
-	ErrorConvert[alphaExpNeg, \[Sigma]2*chi2/(Ndata-MvarNeg)]}
+	MvarNeg = 2*Length[pmodes];*)
+	{\[Rho]2max[[1]], \[Rho]2max[[2]], alphaExpPos, alphaExpNeg
+(*, ErrorConvert[alphaExpPos, \[Sigma]2*chi2/(Ndata-MvarPos)],
+	ErrorConvert[alphaExpNeg, \[Sigma]2*chi2/(Ndata-MvarNeg)]*)}
 ]
 
 
@@ -220,25 +227,26 @@ Module[{i,coeffs,coeffsentry,mccoeffs={},d\[Delta]=0,da=0,d\[Theta]=0,err=0},
 		If[Head[coeffsentry]==List, 
 			Print["Gamble: ", i];
 			AppendTo[mccoeffs, coeffsentry];
-			d\[Delta] += (coeffs[[1,2,1,2]]-coeffsentry[[1,2,1,2]])^2;
-			da += (coeffs[[1,2,2,2]]-coeffsentry[[1,2,2,2]])^2;
-			d\[Theta] += (coeffs[[1,2,3,2]]-coeffsentry[[1,2,3,2]])^2;
+			d\[Delta] += (coeffs[[2,1,2]]-coeffsentry[[2,1,2]])^2;
+			da += (coeffs[[2,2,2]]-coeffsentry[[2,2,2]])^2;
+			d\[Theta] += (coeffs[[2,3,2]]-coeffsentry[[2,3,2]])^2;
 			,Null(*empty*)
 			,i--(*Coefficients function failed, repeat the iteration*)
 		];	
 	];
-	{mccoeffs,{Sqrt[d\[Delta]/Nstat],Sqrt[da/Nstat],Sqrt[d\[Theta]/Nstat]}~Join~MCBootStrapCError[coeffs,mccoeffs]}
+	{mccoeffs,{Sqrt[d\[Delta]/Nstat],Sqrt[da/Nstat],
+	 Sqrt[d\[Theta]/Nstat]}~Join~MCBootStrapCError[coeffs,mccoeffs]}
 ]
 
 
 MCBootStrapCError[coeffs_,mc_]:=Module[{i,cffs,cSize,dcffs,Nstat},
-	cffs = coeffs[[2]];
+	cffs = coeffs[[3]];
 	cSize = Length@cffs;
 	dcffs = Table[0,{i,1,cSize}];
 	Nstat = Length[mc];
 	For[i=1,i<=Nstat,i++,
-		dcffs += Table[{(mc[[i,2,j,4]]-cffs[[j,4]])^2,
-						(mc[[i,2,j,5]]-cffs[[j,5]])^2},{j,1,cSize}];
+		dcffs += Table[{(mc[[i,3,j,4]]-cffs[[j,4]])^2,
+						(mc[[i,3,j,5]]-cffs[[j,5]])^2},{j,1,cSize}];
 	];
 	Sqrt[dcffs/Nstat]
 ]
@@ -256,10 +264,11 @@ Options[\[Rho]2] = {\[Rho]2DataRand->False}
 				time[[1]][lm[[i, 1]], lm[[i, 2]]], {i,1,Length[lm]}], 1];
 
 	dind = DataIndex[data,lm];
-	\[Psi] = Flatten[Table[data[[dind[[j]], 1, time[[2,i]], 2]] + I*data[[dind[[j]], 1, time[[2,i]], 3]], 
-				{j, 1, Length[dind]}, {i,1, it0}], 1];
+	\[Psi] = Flatten[Table[data[[dind[[j]], 1, time[[2,i]], 2]] + I*data[[dind[[j]], 
+					   1, time[[2,i]], 3]], {j, 1, Length[dind]}, {i,1, it0}], 1];
 
 	\[Psi]\[Psi] = Re[Conjugate[\[Psi]].\[Psi]];
+
 	A = ConjugateTranspose[\[Psi]kmat].\[Psi];
 	B = ConjugateTranspose[\[Psi]kmat].\[Psi]kmat;
 
@@ -269,6 +278,82 @@ Options[\[Rho]2] = {\[Rho]2DataRand->False}
 	(*\[Rho]2max[data,lm,modes,pmodes,\[Delta],a,\[Theta],it0] = out;*)
 	out
 ]
+
+
+RDparamsVst0[data_,lm_,modes_,negmodes_,n1_,nN_]:=Module[{overlapOut,overlapOutlist={},dpoints},
+  For[dpoints=n1,dpoints<=nN,dpoints++,
+    overlapOut=Quiet@Coefficients[data,lm,modes,negmodes,dpoints,
+                                   AccuracyGoal->6,Gradient->{"FiniteDifference"}];
+    AppendTo[overlapOutlist,{data[[1,1,-dpoints,1]],overlapOut}];
+    (*Print["Finished dpoints=",dpoints];*)
+  ];
+  overlapOutlist
+]
+
+
+(*Calculates combinatinos of modes and negmodes*)
+RDparamsVst0Subs[data_,lm_,modes_,negmodes_,n1_,nN_,p1_,p2_]:=Module[
+{submodes,subnegmodes,all,ind1,ind2,i,allout={}},
+  submodes = Subsets[modes];
+  subnegmodes = Subsets[negmodes];
+
+  all = Flatten[Table[{submodes[[i]],subnegmodes[[j]]}, {i,1,Length@submodes},
+                                                          {j,1,Length@subnegmodes}],1];
+  ind1 = Round[Length@all*p1]+1; ind2 = Round[Length@all*p2];
+  If[p1==0,ind1++]; (*skipping empty lists in modes and negmodes*)
+  
+  For[i=ind1,i<=ind2,i++,
+    AppendTo[allout,{all[[i,1]],all[[i,2]],RDparamsVst0[data,lm,modes,negmodes,n1,nN]}];
+    Print["Finished: modes=", all[[i,1]],", negmodes=",all[[i,2]]];
+  ];
+  allout
+]
+
+
+Options[RDparamsVst0Plot]=Union[{}, Options@ListPlot]
+Plotrho2maxVst0[overlapdata_,opts:OptionsPattern[]]:=Module[{rho2maxt0},
+  rho2maxt0 = Table[{overlapdata[[i,1]], overlapdata[[i,2,1]]},{i,1,Length@overlapdata}];
+  ListPlot[rho2maxt0,Joined->True,Frame->True,FrameLabel->{"\!\(\*SubscriptBox[\(t\), \(0\)]\)",
+                     "\!\(\*SubsuperscriptBox[\(\[Rho]\), \(max\), \(2\)]\)"},PlotStyle->Blue,
+                     Evaluate@FilterRules[{opts},Options@ListPlot]]
+]
+
+
+Options[PlotParamVst0]=Union[{}, Options@ListPlot]
+PlotParamVst0[which_,param_,label_,overlapdata_,opts:OptionsPattern[]]:=
+Module[{t0param,plotthis,colors},
+  t0param = Table[{overlapdata[[i,1]], overlapdata[[i,2,2,which,2]]},{i,1,Length@overlapdata}];
+   
+  If[NumberQ@param,
+    plotthis = {t0param,{{overlapdata[[1,1]],param},{overlapdata[[-1,1]],param}}};
+    colors = {Blue,Red};
+  ,
+    plotthis = t0param;
+    colors = Blue;
+ ];
+
+  ListPlot[plotthis,Joined->True,Frame->True,
+           FrameLabel->{"\!\(\*SubscriptBox[\(t\), \(0\)]\)",label},RotateLabel->False,
+           PlotStyle->colors, Evaluate@FilterRules[{opts},Options@ListPlot]]
+]
+
+
+Options[PlotMassVst0]=Union[{Mass->None}, Options@PlotParamVst0]
+PlotMassVst0[overlapdata_, opts:OptionsPattern[]] := 
+  PlotParamVst0[1,OptionValue[Mass],"\[Delta]",overlapdata, 
+                Evaluate@FilterRules[{opts},Options@PlotParamVst0]]
+
+
+Options[PlotSpinVst0]=Union[{Spin->None}, Options@ListPlot]
+PlotSpinVst0[overlapdata_, opts:OptionsPattern[]] := 
+  PlotParamVst0[2,OptionValue[Spin],"a",overlapdata, 
+                Evaluate@FilterRules[{opts},Options@PlotParamVst0]]
+
+
+Options[PlotThetaVst0]=Union[{Theta->None}, Options@ListPlot]
+PlotThetaVst0[overlapdata_, opts:OptionsPattern[]] := 
+   PlotParamVst0[3,OptionValue[Theta],"\[Theta]",overlapdata, 
+                Evaluate@FilterRules[{opts},Options@PlotParamVst0]]
 
 
 OverlapPlot::nodata="cannot find a plot for mode `1`";
@@ -295,7 +380,8 @@ Module[{rdata,idata,size,datasize,i,dataCnum,rlp,pr,\[Delta],a,\[Theta]},
 	rlp = ListPlot[rdata];
 
 	pr = Plot[Re[Clm[lm[[1]], lm[[2]], coeffs[[2]], coeffs[[3]], \[Delta], a, \[Theta], t]], {t,0,150}, 
-			  PlotStyle->Red, Axes->False,Frame->True,Evaluate@FilterRules[{opts},Options@Plot]];
+			  PlotStyle->Red, Axes->False,Frame->True,
+			  Evaluate@FilterRules[{opts},Options@Plot]];
 	Show[pr,rlp]
 ]
 
