@@ -303,7 +303,7 @@ RDparamsVst0Subs[data_,lm_,modes_,negmodes_,n1_,nN_,p1_,p2_]:=Module[
   If[p1==0,ind1++]; (*skipping empty lists in modes and negmodes*)
   
   For[i=ind1,i<=ind2,i++,
-    AppendTo[allout,{all[[i,1]],all[[i,2]],RDparamsVst0[data,lm,modes,negmodes,n1,nN]}];
+    AppendTo[allout,{all[[i,1]],all[[i,2]],RDparamsVst0[data,lm,all[[i,1]],all[[i,2]],n1,nN]}];
     Print["Finished: modes=", all[[i,1]],", negmodes=",all[[i,2]]];
   ];
   allout
