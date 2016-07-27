@@ -26,7 +26,7 @@ PlotSpinVst0::usage = "PlotSpinVst0[overlapdata, opts:OptionsPattern[]]";
 PlotThetaVst0::usage = "";
 RDparamsVst0Subs::usage = "RDparamsVst0Subs[data,lm,modes,negmodes,n1,nN,p1,p2]";
 RDparamsVst0Subs2::usage = "RDparamsVst0Subs2[data,lm,modes,negmodes,n1,nN,p]";
-Protect[Mass,Spin,Theta,\[Theta],CoeffsDataRand,\[Rho]2DataRand,GTDataRand];
+Protect[Mass,Spin,Phi,Theta,\[Theta],CoeffsDataRand,\[Rho]2DataRand,GTDataRand];
 
 Begin["Private`"]
 
